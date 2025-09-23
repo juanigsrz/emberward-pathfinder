@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tower Defense Maze Designer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="controls">
+            <div class="control-group">
+                <label for="gridSize">Grid Size:</label>
+                <input type="range" id="gridSize" min="8" max="20" value="12">
+                <span id="gridSizeValue">12</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Mode:</label>
+                <div class="mode-buttons">
+                    <button id="wallMode" class="mode-btn active">Wall</button>
+                    <button id="spawnMode" class="mode-btn">Spawn</button>
+                    <button id="nucleusMode" class="mode-btn">Nucleus</button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <button id="clearAll">Clear All</button>
+                <button id="randomWalls">Random Walls</button>
+            </div>
+            
+            <div class="info">
+                <div>Max Path Distance: <span id="maxDistance">-</span></div>
+                <div>Active Spawns: <span id="spawnCount">0</span></div>
+                <div>Zoom: <span id="zoomLevel">100%</span></div>
+            </div>
+            
+            <div class="controls-help">
+                <small>
+                    <strong>Controls:</strong><br>
+                    • Mouse wheel: Zoom in/out<br>
+                    • Right-click + drag: Pan view<br>
+                    • Left-click + drag: Place/remove walls<br>
+                    • Ctrl + click: Delete any cell
+                </small>
+            </div>
+        </div>
+        
+        <div class="game-area">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+    </div>
+    
+    <script src="pathfinding.js"></script>
+    <script src="renderer.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
