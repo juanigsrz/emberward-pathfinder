@@ -1,0 +1,8 @@
+{
+  "grid_size": [101, 101],
+  "nucleus": [100, 100],
+  "spawns": [[0, 0]],
+  "obstacles": [],
+  "expected_min_path_length": 5200,
+  "description": "Big empty grid"
+}

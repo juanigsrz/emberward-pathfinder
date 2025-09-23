@@ -1,0 +1,32 @@
+{
+  "grid_size": [
+    4,
+    4
+  ],
+  "nucleus": [
+    1,
+    1
+  ],
+  "spawns": [
+    [
+      0,
+      0
+    ],
+    [
+      0,
+      3
+    ],
+    [
+      3,
+      0
+    ],
+    [
+      3,
+      3
+    ]
+  ],
+  "obstacles": [],
+  "expected_min_path_length": 2,
+  "description": "4x4 grid with nucleus near corner and spawns at all corners",
+  "original_expected": 2
+}

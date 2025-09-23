@@ -1,0 +1,45 @@
+{
+  "grid_size": [
+    3,
+    7
+  ],
+  "nucleus": [
+    1,
+    6
+  ],
+  "spawns": [
+    [
+      1,
+      0
+    ]
+  ],
+  "obstacles": [
+    [
+      0,
+      2
+    ],
+    [
+      0,
+      3
+    ],
+    [
+      0,
+      4
+    ],
+    [
+      2,
+      2
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      2,
+      4
+    ]
+  ],
+  "expected_min_path_length": 6,
+  "description": "Corridor-like grid forcing a specific path",
+  "original_expected": 6
+}

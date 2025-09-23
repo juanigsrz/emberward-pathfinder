@@ -1,0 +1,20 @@
+{
+  "grid_size": [
+    5,
+    5
+  ],
+  "nucleus": [
+    4,
+    2
+  ],
+  "spawns": [
+    [
+      2,
+      2
+    ]
+  ],
+  "obstacles": [],
+  "expected_min_path_length": 14,
+  "description": "Spiral-like expected solution",
+  "original_expected": 14
+}

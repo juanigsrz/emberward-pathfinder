@@ -1,0 +1,12 @@
+{
+  "grid_size": [5, 5],
+  "nucleus": [2, 2],
+  "spawns": [[0, 0], [0, 1], [0, 2], [0, 3], [0, 4],
+             [1, 0], [1, 4],
+             [2, 0], [2, 4],
+             [3, 0], [3, 4],
+             [4, 0], [4, 1], [4, 2], [4, 3], [4, 4]],
+  "obstacles": [],
+  "expected_min_path_length": 2,
+  "description": "Many sources surrounding the nucleus"
+}

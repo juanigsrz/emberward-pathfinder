@@ -1,0 +1,8 @@
+{
+  "grid_size": [21, 21],
+  "nucleus": [20, 20],
+  "spawns": [[0, 0]],
+  "obstacles": [],
+  "expected_min_path_length": 800,
+  "description": "Medium sized grid for testing scalability"
+}
