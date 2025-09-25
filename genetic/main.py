@@ -22,8 +22,8 @@ if __name__ == "__main__":
 
     best_chrom, best_score = genetic_algorithm.run_ga(
         nrows, ncols, spawns, target, obstacles, unbuildables,
-        pop_size=100, generations=50, mutation_rate=0.01,
-        elite_frac=0.1, tournament_k=5, verbose=True
+        pop_size=200, generations=1000, mutation_rate=0.01,
+        elite_frac=0.5, tournament_k=5, verbose=True
     )
 
     print("\nBest solution found:")

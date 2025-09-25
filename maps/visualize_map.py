@@ -48,7 +48,7 @@ def shortest_path(grid, start, goal):
         for dr, dc in [(-1,0),(1,0),(0,-1),(0,1)]:
             nr, nc = r+dr, c+dc
             if 0 <= nr < R and 0 <= nc < C and (nr, nc) not in seen:
-                if grid[nr][nc] != "#":  # walls/obstacles block
+                if grid[nr][nc] in ('.','S','T','X'):  # walls/obstacles block
                     q.append(((nr, nc), path+[(r, c)]))
                     seen.add((nr, nc))
     return None
@@ -63,9 +63,19 @@ def visualize_map(lines):
         "spawn": (0.1, 0.6, 0.1),      # green
         "target": (0.8, 0.1, 0.1),     # red
         "unbuild": (0.3, 0.6, 0.9),    # blue
+        "I": (0.0, 1.0, 1.0),          # cyan
+        "O": (1.0, 1.0, 0.0),          # yellow
+        "M": (0.5, 0.0, 0.5),          # purple
+        "N": (0.0, 1.0, 0.0),          # green
+        "Z": (1.0, 0.0, 0.0),          # red
+        "J": (0.0, 0.0, 1.0),          # blue
+        "L": (1.0, 0.5, 0.0)           # orange
     }
 
     grid_colors = np.zeros((R, C, 3))
+    free_colors = [ (0.2, 0.8, 0.5), # aquamarine
+                    (0.9, 0.1, 0.6), # pink
+                    (0.1, 0.6, 0.9)] # sky blue
     for r in range(R):
         for c in range(C):
             ch = lines[r][c]
@@ -77,14 +87,21 @@ def visualize_map(lines):
                 grid_colors[r, c] = color_map["wall"]
             elif ch == "X":
                 grid_colors[r, c] = color_map["unbuild"]
-            else:
+            elif ch == ".":
                 grid_colors[r, c] = color_map["empty"]
+            else:
+                if ch not in color_map:
+                    if len(free_colors) > 0:
+                        color_map[ch] = free_colors.pop(0)
+                    else:
+                        color_map[ch] = (np.random.rand(), np.random.rand(), np.random.rand())
+                grid_colors[r, c] = color_map[ch]
 
     fig, ax = plt.subplots(figsize=(C/2, R/2))
     ax.imshow(grid_colors, interpolation="none")
     ax.set_xticks(np.arange(-0.5, C, 1), minor=True)
     ax.set_yticks(np.arange(-0.5, R, 1), minor=True)
-    ax.grid(which="minor", color="k", linestyle="-", linewidth=0.5)
+    ax.grid(which="minor", color="k", linestyle="dotted", linewidth=0.5)
     ax.set_xticks([])
     ax.set_yticks([])
 
@@ -93,7 +110,7 @@ def visualize_map(lines):
         path = shortest_path(lines, spawn, target)
         if path:
             y, x = zip(*path)
-            ax.plot(x, y, color="yellow", linewidth=2, alpha=0.8)
+            ax.plot(x, y, color="#AAAAAA", linewidth=4, alpha=0.8)
 
     plt.show()
 
