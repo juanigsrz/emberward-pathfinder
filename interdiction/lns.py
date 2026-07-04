@@ -1,11 +1,14 @@
-"""Large-neighborhood search: exact master re-optimization of map windows."""
+"""Large-neighborhood search: exact contracted-window re-optimization."""
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
 
-WINDOW_SIZES = (8, 12, 16)
+from interdiction.contract import contract
+from interdiction.window_master import solve_window
+
+WINDOW_SIZES = (12, 16, 20)
 STALL_LIMIT = 20
 RANDOM_CENTER_PROB = 0.2
 
@@ -38,7 +41,8 @@ def _pick_center(grid, walls, per_spawn, rng):
     return rng.choice(sorted(grid.walkable))
 
 
-def run_lns(grid, master, seed_walls, *, total_time, subsolve_time=30.0, rng):
+def run_lns(grid, seed_walls, *, total_time, subsolve_time=15.0, rng,
+            corridor_hint=True, window_sizes=WINDOW_SIZES):
     best = set(seed_walls)
     best_val, best_per = grid.evaluate(best)
     assert best_val is not None, "seed walls disconnect a spawn"
@@ -54,24 +58,34 @@ def run_lns(grid, master, seed_walls, *, total_time, subsolve_time=30.0, rng):
             break
         it += 1
         if stall >= STALL_LIMIT:
-            size = WINDOW_SIZES[-1]
+            size = window_sizes[-1]
         else:
-            size = WINDOW_SIZES[(it - 1) % len(WINDOW_SIZES)]
+            size = window_sizes[(it - 1) % len(window_sizes)]
         center = _pick_center(grid, result.walls, result.per_spawn, rng)
-        free = _window_cells(grid, center, size) & grid.buildable
-        fixed = result.walls - free
+        window = _window_cells(grid, center, size)
+        free = window & grid.buildable
+        outside_walls = result.walls - free
 
-        res = master.solve(free=free, fixed_walls=fixed,
-                           time_limit=min(subsolve_time, remaining),
-                           warm_start=result.walls)
+        cw = contract(grid, window, outside_walls)
+        res = solve_window(cw, time_limit=min(subsolve_time, remaining),
+                           warm_start=result.walls & free,
+                           corridor_hint=corridor_hint)
         if res.status == "INTERRUPTED":
             result.interrupted = True
-        if res.maximin is not None and res.maximin > result.maximin:
-            result.walls = set(res.walls)
-            result.maximin, result.per_spawn = res.maximin, res.per_spawn
-            result.trajectory.append(
-                (time.monotonic() - t0, it, result.maximin))
-            stall = 0
+        if res.walls is not None:
+            candidate = outside_walls | res.walls
+            val, per = grid.evaluate(candidate)
+            # contraction exactness: BFS must agree with the contracted claim
+            assert val == res.maximin and per == res.per_spawn, \
+                "contracted claim disagrees with BFS — contraction bug"
+            if val > result.maximin:
+                result.walls = candidate
+                result.maximin, result.per_spawn = val, per
+                result.trajectory.append(
+                    (time.monotonic() - t0, it, result.maximin))
+                stall = 0
+            else:
+                stall += 1
         else:
             stall += 1
         if result.interrupted:

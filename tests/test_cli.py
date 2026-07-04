@@ -58,6 +58,7 @@ def test_lns_pipeline_smoke(make_map, tmp_path, capsys):
     out_file = str(tmp_path / "sol.txt")
     assert main([path, "--time", "20", "--bound-frac", "0.5",
                  "--subsolve-time", "4", "--rng-seed", "1",
+                 "--window-sizes", "6,8", "--no-corridor-hint",
                  "--out", out_file]) == 0
     grid = parse_map(path)
     walls = parse_solution(grid, out_file)

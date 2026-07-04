@@ -2,7 +2,6 @@ import random
 
 from interdiction.grid import parse_map
 from interdiction.lns import _pick_center, _window_cells, run_lns
-from interdiction.master import MasterSolver
 
 
 def test_window_cells_clipped_to_grid(make_map):
@@ -27,7 +26,6 @@ def test_pick_center_prefers_binding_path(make_map):
     """))
     rng = random.Random(1)
     _, per = g.evaluate(set())
-    # spawn (0,0) is binding (distance 4 < 6)
     for _ in range(20):
         center = _pick_center(g, set(), per, rng)
         assert center in g.walkable
@@ -37,11 +35,18 @@ def test_lns_improves_over_empty_walls():
     grid = parse_map("maps/basic.txt")
     baseline, _ = grid.evaluate(set())
     rng = random.Random(0)
-    master = MasterSolver(grid, rng=rng)
-    res = run_lns(grid, master, set(), total_time=25.0, subsolve_time=5.0,
-                  rng=rng)
+    res = run_lns(grid, set(), total_time=25.0, subsolve_time=5.0, rng=rng)
     assert res.maximin > baseline
-    val, per = grid.evaluate(res.walls)          # invariant: no overclaim
+    val, per = grid.evaluate(res.walls)
     assert val == res.maximin and per == res.per_spawn
     assert res.trajectory[0][2] == baseline
     assert res.trajectory[-1][2] == res.maximin
+
+
+def test_lns_no_hints_also_improves():
+    grid = parse_map("maps/basic.txt")
+    baseline, _ = grid.evaluate(set())
+    rng = random.Random(3)
+    res = run_lns(grid, set(), total_time=15.0, subsolve_time=5.0, rng=rng,
+                  corridor_hint=False)
+    assert res.maximin > baseline

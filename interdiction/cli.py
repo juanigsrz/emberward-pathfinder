@@ -37,7 +37,11 @@ def main(argv=None) -> int:
                    help="total wall-clock budget in seconds")
     p.add_argument("--bound-frac", type=float, default=0.25,
                    help="fraction of budget for the final full-map bound run")
-    p.add_argument("--subsolve-time", type=float, default=30.0)
+    p.add_argument("--subsolve-time", type=float, default=15.0)
+    p.add_argument("--no-corridor-hint", action="store_true",
+                   help="disable corridor-structure constraints in LNS windows")
+    p.add_argument("--window-sizes", default="12,16,20",
+                   help="comma-separated LNS window sizes")
     p.add_argument("--rng-seed", type=int, default=0)
     p.add_argument("--out", help="solution output path")
     p.add_argument("--exact", action="store_true",
@@ -79,9 +83,13 @@ def main(argv=None) -> int:
                 best = res.walls
             bound_val = res.bound
         else:
-            lns = run_lns(grid, master, walls,
+            window_sizes = tuple(
+                int(x) for x in args.window_sizes.split(","))
+            lns = run_lns(grid, walls,
                           total_time=args.time * (1 - args.bound_frac),
-                          subsolve_time=args.subsolve_time, rng=rng)
+                          subsolve_time=args.subsolve_time, rng=rng,
+                          corridor_hint=not args.no_corridor_hint,
+                          window_sizes=window_sizes)
             best = lns.walls
             for elapsed, it, v in lns.trajectory:
                 print(f"[lns] t={elapsed:7.1f}s iter={it:4d} maximin={v}")
