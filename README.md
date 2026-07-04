@@ -20,23 +20,40 @@ myenv/bin/python -m interdiction maps/basic.txt --exact --time 120
 myenv/bin/python -m interdiction maps/endless.txt --seed sol.txt --eval-only
 ```
 
+LNS window subsolves use **portal contraction**: the fixed outside of each
+window is collapsed into exact portal-to-portal shortest-distance edges, so
+each window solves a ~300-node weighted graph instead of the full map (the
+callback runs a small Dijkstra instead of a 3,600-cell BFS — roughly 4-5x
+more search per window). Windows also apply **corridor hints** by default:
+every fully-free 2x2 square gets `sum(y) >= 1` (no open plazas) and
+`sum(y) <= 3` (no thick wall blocks), encoding how human players build
+mazes. Hints are heuristic — disable with `--no-corridor-hint` (recommended
+when polishing a seed that was not built corridor-style, e.g. the annealing
+solution: its structure violates the hints and every hinted window would
+just reject). `--window-sizes 12,16,20` overrides window sizes; `--exact`
+and the bound phase never use hints and stay fully exact.
+
 Objective is maximin over spawns (maximize the worst spawn's shortest path).
 Results (Ryzen 5 5600X, Gurobi 12.0.3):
 
 | Map | Mode | Maximin | Bound | Time |
 | --- | --- | --- | --- | --- |
 | `basic.txt` (7x7) | `--exact` | **28 (proven optimal)** | 28 | 2.8 s |
-| `smaller_endless.txt` (37x37) | LNS, empty seed | 172 (from 20) | 971 | 15 min |
-| `endless.txt` (60x60) | LNS, annealing seed | 1408 (= seed) | 3202 | 60 min |
+| `smaller_endless.txt` (37x37) | LNS, empty seed, hints | 228 (from 20; v1: 172) | 971 | 15 min |
+| `endless.txt` (60x60) | LNS, annealing seed, no hints | 1408 (= seed) | 3202 | 60 min |
+| `endless.txt` (60x60) | LNS, empty seed, hints | 510 (from 20; v1: no progress) | 3202 | 60 min |
 
-Baselines on `endless.txt`: annealing 1408, genetic 213. The LNS matches but
-does not improve the annealing solution — its 8–16-cell windows cannot
-restructure an already-tuned serpentine maze, and the path-cut LP relaxation
-is too weak to prune the search (root bound ~3202 regardless of cuts), so
-window solves are effectively enumeration. The bound on large maps is valid
-but loose for the same reason. Where this solver clearly wins: proven optima
-on small/mid maps in seconds, strong from-scratch solutions (20 -> 172 on
-smaller_endless in 15 min), and honest gap reporting.
+Baselines on `endless.txt`: annealing 1408, genetic 213. The annealing
+solution is empirically locally optimal with respect to exact rewrites of
+every 12-20-cell window tried in an hour — the contraction searched ~4x
+more configurations per window than v1 and still found no improving move.
+Progress past 1408 would need structurally different moves (much larger
+windows, corridor re-routing across windows, or a better global bound).
+The bound on large maps is valid but loose: fractional walls defeat the
+path-cut LP relaxation (root bound ~3202 regardless of cuts). Where the
+solver wins: proven optima on small/mid maps in seconds, strong
+from-scratch mazes (20 -> 228 on smaller_endless in 15 min, 20 -> 510 on
+endless in 1 h, both still climbing at cutoff), and honest gap reporting.
 
 ### Genetic
 **Genetic algorithm:** more of an experiment than not, but it may be a good "greedy" approach as it has some resemblance to what a human player does playing the game.
