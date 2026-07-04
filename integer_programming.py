@@ -29,6 +29,8 @@ def build_and_solve(rows=8, cols=8, spawn=(0,0), nucleus=None, time_limit=60):
     M = N_max
 
     m = Model("grid_parent_patch")
+    m.setParam("Presolve", 2)
+    m.setParam("Cuts", 2)
     m.setParam("OutputFlag", 1)
     m.setParam("TimeLimit", time_limit)
 
@@ -102,4 +104,4 @@ def build_and_solve(rows=8, cols=8, spawn=(0,0), nucleus=None, time_limit=60):
     return d_val[spawn]
 
 if __name__ == "__main__":
-    build_and_solve(rows=9, cols=9, spawn=(0,0), nucleus=(8,8), time_limit=120)
+    build_and_solve(rows=8, cols=8, spawn=(0,0), nucleus=(7,7), time_limit=120)

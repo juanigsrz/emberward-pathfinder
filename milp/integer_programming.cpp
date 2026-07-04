@@ -267,7 +267,7 @@ int main(int argc, char* argv[]) {
     
     try {
         string mapfile = argv[1];
-        IntegerProgrammingSolver::buildAndSolveFromFile(mapfile, 120);
+        IntegerProgrammingSolver::buildAndSolveFromFile(mapfile, 600);
     } catch (const exception& e) {
         cerr << "Error: " << e.what() << endl;
         return 1;
