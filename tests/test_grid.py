@@ -1,6 +1,6 @@
 import pytest
 
-from interdiction.grid import parse_map
+from interdiction.grid import parse_map, parse_solution, write_solution
 
 
 def test_parse_symbols_and_derived_sets(make_map):
@@ -109,6 +109,35 @@ def test_manhattan_parity(make_map):
     """))
     assert g.manhattan_parity((0, 0)) == 0    # distance 4
     assert g.manhattan_parity((2, 0)) == 0    # distance 6
+
+
+def test_solution_roundtrip(make_map, tmp_path):
+    g = parse_map(make_map("""
+        S....
+        .....
+        ....T
+    """))
+    walls = {(0, 2), (1, 2)}
+    out = str(tmp_path / "sol.txt")
+    write_solution(g, walls, out)
+    assert (tmp_path / "sol.txt").read_text() == "S.W..\n..W..\n....T\n"
+    assert parse_solution(g, out) == walls
+
+
+def test_parse_solution_hash_convention_ignores_base_obstacles(make_map):
+    base = parse_map(make_map("""
+        S.#..
+        .....
+        ....T
+    """, name="base.txt"))
+    # annealing/genetic convention: placed walls written as '#'
+    sol = make_map("""
+        S.#.#
+        ..#..
+        ....T
+    """, name="sol.txt")
+    # (0,2) is a base obstacle -> not a wall; (0,4) and (1,2) are walls
+    assert parse_solution(base, sol) == {(0, 4), (1, 2)}
 
 
 @pytest.mark.parametrize("text,msg", [

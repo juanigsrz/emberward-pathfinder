@@ -124,3 +124,39 @@ def parse_map(path: str) -> GridMap:
         bad = [s for s, d in zip(g.spawns, per) if d is None]
         raise ValueError(f"spawns unreachable even with zero walls: {bad}")
     return g
+
+
+def parse_solution(grid: GridMap, path: str) -> set[Cell]:
+    """Read placed walls from a solution map file.
+
+    Both conventions in maps/ are accepted: '#' (annealing/genetic solution
+    files) and 'W' (integer_programming_file.py output). Only cells that are
+    buildable in the base map count — base obstacles stay obstacles.
+    """
+    with open(path) as f:
+        lines = [ln.rstrip("\n") for ln in f if ln.strip()]
+    return {(r, c)
+            for r, row in enumerate(lines)
+            for c, ch in enumerate(row)
+            if ch in "#W" and (r, c) in grid.buildable}
+
+
+def write_solution(grid: GridMap, walls, path: str) -> None:
+    walls = set(walls)
+    with open(path, "w") as f:
+        for r in range(grid.rows):
+            for c in range(grid.cols):
+                v = (r, c)
+                if v in grid.spawns:
+                    f.write("S")
+                elif v == grid.target:
+                    f.write("T")
+                elif v in grid.obstacles:
+                    f.write("#")
+                elif v in walls:
+                    f.write("W")
+                elif v in grid.unbuildables:
+                    f.write("X")
+                else:
+                    f.write(".")
+            f.write("\n")
