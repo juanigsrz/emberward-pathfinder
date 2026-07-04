@@ -63,6 +63,7 @@ def visualize_map(lines):
         "spawn": (0.1, 0.6, 0.1),      # green
         "target": (0.8, 0.1, 0.1),     # red
         "unbuild": (0.3, 0.6, 0.9),    # blue
+        "W": (0.45, 0.30, 0.15),       # placed wall — brown, vs black '#'
         "I": (0.0, 1.0, 1.0),          # cyan
         "O": (1.0, 1.0, 0.0),          # yellow
         "M": (0.5, 0.0, 0.5),          # purple
@@ -87,6 +88,8 @@ def visualize_map(lines):
                 grid_colors[r, c] = color_map["wall"]
             elif ch == "X":
                 grid_colors[r, c] = color_map["unbuild"]
+            elif ch == "W":
+                grid_colors[r, c] = color_map["W"]
             elif ch == ".":
                 grid_colors[r, c] = color_map["empty"]
             else:
