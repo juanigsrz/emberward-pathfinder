@@ -19,6 +19,9 @@ import gurobipy as gp
 from gurobipy import GRB
 
 ALT_PATHS_PER_SPAWN = 3
+ALT_POOL_THRESHOLD = 2000   # stop sampling alternates once the pool is this big
+POOL_CAP = 5000             # hard cap on stored paths (~1400 cells each on endless)
+MAX_CUT_ROWS = 4000         # re-add at most this many pool cuts per solve
 
 
 @dataclass
@@ -49,7 +52,7 @@ class MasterSolver:
         self.cut_pool: set[tuple[int, tuple]] = set()
         self.cut_pool.update(self._paths_for(frozenset()))
 
-    def _paths_for(self, walls):
+    def _paths_for(self, walls, alts=ALT_PATHS_PER_SPAWN):
         """Shortest path + alternates per spawn under `walls`, as pool entries."""
         dist = self.grid.dist_field(walls)
         out = []
@@ -57,7 +60,7 @@ class MasterSolver:
             if s not in dist:
                 continue
             seen = set()
-            for _ in range(1 + ALT_PATHS_PER_SPAWN):
+            for _ in range(1 + alts):
                 p = tuple(self.grid.shortest_path(walls, s, dist=dist,
                                                   rng=self.rng))
                 if p not in seen:
@@ -83,6 +86,38 @@ class MasterSolver:
         m.Params.SoftMemLimit = 8
         if time_limit is not None:
             m.Params.TimeLimit = max(time_limit, 0.01)
+        if len(free) < len(g.buildable):
+            # window subsolves only need improving incumbents, not proofs —
+            # the LP bound is vacuous there anyway
+            m.Params.MIPFocus = 1
+
+        # warm-start paths must join the pool before it is classified below
+        ws_eval = None
+        if warm_start is not None:
+            ws_eval = g.evaluate(warm_start)
+            assert ws_eval[0] is not None, "warm start disconnects a spawn"
+            self.cut_pool.update(self._paths_for(warm_start))
+
+        # Classify pool cuts against the fixed/free split:
+        # - a fixed wall on the path makes the cut vacuous (RHS >= U): skip
+        # - no free cell on the path means the path stays open: it caps z_k
+        #   as a plain bound, no constraint row needed
+        # - otherwise the cut becomes a row over the path's free cells only
+        K = len(g.spawns)
+        zk_ub = [self.U] * K
+        rows = []
+        for k, path in self.cut_pool:
+            length = len(path) - 1
+            if any(v in fixed_walls for v in path):
+                continue
+            free_cells = [v for v in path if v in free]
+            if not free_cells:
+                zk_ub[k] = min(zk_ub[k], length)
+            else:
+                rows.append((k, length, free_cells))
+        if len(rows) > MAX_CUT_ROWS:
+            rows.sort(key=lambda t: t[1])   # shortest paths = tightest cuts
+            rows = rows[:MAX_CUT_ROWS]
 
         # --- wall variables (fixed cells pinned via bounds) ---
         y = {}
@@ -100,8 +135,8 @@ class MasterSolver:
         for k, s in enumerate(g.spawns):
             par = g.manhattan_parity(s)
             q = m.addVar(vtype=GRB.INTEGER, lb=(d0[s] - par) // 2,
-                         ub=(self.U - par) // 2, name=f"q_{k}")
-            zk = m.addVar(vtype=GRB.INTEGER, lb=d0[s], ub=self.U,
+                         ub=(zk_ub[k] - par) // 2, name=f"q_{k}")
+            zk = m.addVar(vtype=GRB.INTEGER, lb=d0[s], ub=zk_ub[k],
                           name=f"z_{k}")
             m.addConstr(zk == 2 * q + par)
             zvars.append(zk)
@@ -111,7 +146,6 @@ class MasterSolver:
         m.setObjective(z, GRB.MAXIMIZE)
 
         # --- connectivity flow (continuous; infeasibility impossible) ---
-        K = len(g.spawns)
         spawn_set = set(g.spawns)
         arcs = [(u, v) for u in g.walkable for v in g.neighbors(u)]
         f = m.addVars(arcs, lb=0.0, name="f")
@@ -130,19 +164,18 @@ class MasterSolver:
             hits = gp.quicksum(y[v] for v in path if v in y)
             return zvars[k] <= length + (self.U - length) * hits
 
-        # --- warm start ---
-        if warm_start is not None:
-            ws_val, ws_per = g.evaluate(warm_start)
-            assert ws_val is not None, "warm start disconnects a spawn"
+        # --- warm start (pool contribution already merged above) ---
+        if ws_eval is not None:
+            ws_val, ws_per = ws_eval
             for v, var in y.items():
                 var.Start = 1.0 if v in warm_start else 0.0
             for k, zk in enumerate(zvars):
                 zk.Start = ws_per[k]
             z.Start = ws_val
-            self.cut_pool.update(self._paths_for(warm_start))
 
-        for k, path in self.cut_pool:
-            m.addConstr(cut_expr(k, path))
+        for k, length, free_cells in rows:
+            m.addConstr(zvars[k] <= length + (self.U - length)
+                        * gp.quicksum(y[v] for v in free_cells))
 
         # --- lazy cut callback ---
         order = sorted(y)
@@ -163,10 +196,13 @@ class MasterSolver:
                     violated.add(k)
             if not violated:
                 return
-            for k, p in self._paths_for(walls):
+            alts = (ALT_PATHS_PER_SPAWN
+                    if len(self.cut_pool) < ALT_POOL_THRESHOLD else 0)
+            for k, p in self._paths_for(walls, alts=alts):
                 if k in violated:
                     model.cbLazy(cut_expr(k, p))
-                    self.cut_pool.add((k, p))
+                    if len(self.cut_pool) < POOL_CAP:
+                        self.cut_pool.add((k, p))
 
         m.optimize(cb)
 
