@@ -34,6 +34,7 @@ _STATUS = {
     GRB.OPTIMAL: "OPTIMAL",
     GRB.TIME_LIMIT: "TIME_LIMIT",
     GRB.INTERRUPTED: "INTERRUPTED",
+    GRB.MEM_LIMIT: "MEM_LIMIT",
 }
 
 
@@ -76,6 +77,10 @@ class MasterSolver:
         m.Params.OutputFlag = 1 if self.output else 0
         m.Params.LazyConstraints = 1
         m.Params.Seed = self.gurobi_seed
+        # keep repeated solves from exhausting RAM: spill the B&B tree to
+        # disk past 0.5 GB and stop with MEM_LIMIT instead of getting OOM-killed
+        m.Params.NodefileStart = 0.5
+        m.Params.SoftMemLimit = 8
         if time_limit is not None:
             m.Params.TimeLimit = max(time_limit, 0.01)
 
@@ -165,19 +170,27 @@ class MasterSolver:
 
         m.optimize(cb)
 
+        # the callback closure keeps the model alive through reference
+        # cycles — dispose explicitly or repeated solves leak the C-side
+        # model memory until the machine OOMs
         if m.Status == GRB.INFEASIBLE:
             m.computeIIS()
             m.write("master_infeasible.ilp")
+            m.dispose()
             raise AssertionError(
                 "master infeasible — impossible by construction, see .ilp")
 
         status = _STATUS.get(m.Status, str(m.Status))
+        bound = m.ObjBound
         if m.SolCount == 0:
-            return SolveResult("NO_SOLUTION", None, None, None, m.ObjBound)
+            m.dispose()
+            return SolveResult("NO_SOLUTION", None, None, None, bound)
 
         walls = {v for v, var in y.items() if var.X > 0.5}
+        obj_val = m.ObjVal
+        m.dispose()
         maximin, per = g.evaluate(walls)
         # callback guarantees incumbents never overclaim
-        assert maximin is not None and round(m.ObjVal) <= maximin, \
+        assert maximin is not None and round(obj_val) <= maximin, \
             "incumbent overclaims shortest path — cut bug"
-        return SolveResult(status, walls, maximin, per, m.ObjBound)
+        return SolveResult(status, walls, maximin, per, bound)
