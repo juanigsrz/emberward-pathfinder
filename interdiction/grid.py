@@ -36,7 +36,8 @@ class GridMap:
             if n in self.walkable:
                 yield n
 
-    def evaluate(self, walls):
+    def dist_field(self, walls) -> dict[Cell, int]:
+        """BFS distances to target over walkable cells, excluding walls."""
         walls = set(walls)
         dist = {self.target: 0}
         q = deque([self.target])
@@ -46,10 +47,40 @@ class GridMap:
                 if v not in dist and v not in walls:
                     dist[v] = dist[u] + 1
                     q.append(v)
+        return dist
+
+    def evaluate(self, walls):
+        """(maximin, per-spawn distances); maximin None if any spawn cut off."""
+        dist = self.dist_field(walls)
         per = tuple(dist.get(s) for s in self.spawns)
         if any(d is None for d in per):
             return None, per
         return min(per), per
+
+    def shortest_path(self, walls, spawn: Cell, dist=None, rng=None):
+        """One shortest spawn->target path as a cell list, or None.
+
+        rng, if given, picks uniformly among predecessors on the
+        shortest-path DAG — used to sample alternate optimal paths.
+        """
+        if dist is None:
+            dist = self.dist_field(walls)
+        if spawn not in dist:
+            return None
+        walls = set(walls)
+        path = [spawn]
+        cur = spawn
+        while cur != self.target:
+            nxts = [v for v in self.neighbors(cur)
+                    if v not in walls and dist.get(v) == dist[cur] - 1]
+            cur = rng.choice(nxts) if rng is not None else nxts[0]
+            path.append(cur)
+        return path
+
+    def manhattan_parity(self, spawn: Cell) -> int:
+        """Parity of every possible spawn->target path length (grid bipartite)."""
+        return (abs(spawn[0] - self.target[0])
+                + abs(spawn[1] - self.target[1])) % 2
 
 
 def parse_map(path: str) -> GridMap:
