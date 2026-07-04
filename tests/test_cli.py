@@ -32,6 +32,22 @@ def test_exact_solve_writes_solution(make_map, tmp_path, capsys):
     assert "bound:" in printed and "gap:" in printed
 
 
+def test_disconnecting_preset_walls_fall_back_to_empty(make_map, tmp_path,
+                                                       capsys):
+    # preset W walls seal the spawn: solver must recover, eval-only must not
+    path = make_map("""
+        SW.
+        W..
+        ..T
+    """)
+    assert main([path, "--eval-only"]) == 2
+    out_file = str(tmp_path / "sol.txt")
+    assert main([path, "--exact", "--time", "10", "--out", out_file]) == 0
+    grid = parse_map(path)
+    val, _ = grid.evaluate(parse_solution(grid, out_file))
+    assert val is not None
+
+
 def test_lns_pipeline_smoke(make_map, tmp_path, capsys):
     path = make_map("""
         S......

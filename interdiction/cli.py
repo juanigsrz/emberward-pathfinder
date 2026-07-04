@@ -51,13 +51,19 @@ def main(argv=None) -> int:
     if args.seed:
         walls |= parse_solution(grid, args.seed)
     val, _ = grid.evaluate(walls)
-    if val is None:
-        print("error: initial walls disconnect a spawn", file=sys.stderr)
-        return 2
 
     if args.eval_only:
+        if val is None:
+            print("error: initial walls disconnect a spawn", file=sys.stderr)
+            return 2
         print(_summary(grid, walls))
         return 0
+
+    if val is None:
+        # preset/seed walls are only warm-start hints — recover, don't abort
+        print("warning: initial walls disconnect a spawn — "
+              "starting from empty walls", file=sys.stderr)
+        walls = set()
 
     rng = random.Random(args.rng_seed)
     master = MasterSolver(grid, rng=rng, gurobi_seed=args.rng_seed,
