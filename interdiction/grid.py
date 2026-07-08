@@ -13,6 +13,33 @@ Cell = tuple[int, int]
 _DIRS = ((-1, 0), (1, 0), (0, -1), (0, 1))
 
 
+def square2(anchor: Cell) -> tuple[Cell, Cell, Cell, Cell]:
+    """The 2x2 square of cells whose top-left corner is `anchor`."""
+    r, c = anchor
+    return ((r, c), (r + 1, c), (r, c + 1), (r + 1, c + 1))
+
+
+def tile2_decompose(walls) -> set[Cell]:
+    """Anchors of the unique disjoint 2x2 tiling of `walls`.
+
+    Raises ValueError if the cells are not tileable. Row-major greedy is
+    exact here: the first uncovered wall cell must be its block's top-left
+    corner, since the cells above and to the left of it are already covered.
+    """
+    walls = set(walls)
+    anchors: set[Cell] = set()
+    covered: set[Cell] = set()
+    for v in sorted(walls):
+        if v in covered:
+            continue
+        sq = square2(v)
+        if not all(u in walls and u not in covered for u in sq):
+            raise ValueError(f"walls are not a disjoint 2x2 tiling at {v}")
+        anchors.add(v)
+        covered.update(sq)
+    return anchors
+
+
 @dataclass
 class GridMap:
     rows: int

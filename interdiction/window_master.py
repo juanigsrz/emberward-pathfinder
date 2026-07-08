@@ -13,11 +13,16 @@ from __future__ import annotations
 import gurobipy as gp
 from gurobipy import GRB
 
+from interdiction.grid import square2
 from interdiction.master import SolveResult, _STATUS
 
 
 def solve_window(cw, *, time_limit=None, warm_start=None, corridor_hint=True,
+                 blocks2=False, warm_anchors=None,
                  gurobi_seed=0, output=False) -> SolveResult:
+    # a placed 2x2 block is exactly the "thick wall" square the hint forbids
+    if blocks2:
+        corridor_hint = False
     g = cw.grid
     U = len(g.walkable) - 1
     K = len(g.spawns)
@@ -35,6 +40,20 @@ def solve_window(cw, *, time_limit=None, warm_start=None, corridor_hint=True,
 
     y = {v: m.addVar(vtype=GRB.BINARY, name=f"y_{v[0]}_{v[1]}")
          for v in sorted(cw.free)}
+
+    # 2x2 block placement: only blocks fully inside the free set are allowed,
+    # so any window solution keeps the global disjoint-block tiling intact
+    b = {}
+    if blocks2:
+        cover = {v: [] for v in cw.free}
+        for a in sorted(cw.free):
+            sq = square2(a)
+            if all(v in cw.free for v in sq):
+                b[a] = m.addVar(vtype=GRB.BINARY, name=f"b_{a[0]}_{a[1]}")
+                for v in sq:
+                    cover[v].append(b[a])
+        for v in sorted(cw.free):
+            m.addConstr(y[v] == gp.quicksum(cover[v]))
 
     base = cw.dijkstra(frozenset())
     zvars = []
@@ -77,6 +96,9 @@ def solve_window(cw, *, time_limit=None, warm_start=None, corridor_hint=True,
         ws = set(warm_start) & cw.free
         for v, var in y.items():
             var.Start = 1.0 if v in ws else 0.0
+        if warm_anchors is not None:
+            for a, var in b.items():
+                var.Start = 1.0 if a in warm_anchors else 0.0
         ws_res = cw.dijkstra(ws)
         if all(d is not None for d, _cells in ws_res):
             for k, (d, _cells) in enumerate(ws_res):
@@ -118,6 +140,8 @@ def solve_window(cw, *, time_limit=None, warm_start=None, corridor_hint=True,
         return SolveResult("NO_SOLUTION", None, None, None, bound)
 
     walls = {v for v, var in y.items() if var.X > 0.5}
+    anchors = ({a for a, var in b.items() if var.X > 0.5}
+               if blocks2 else None)
     obj_val = m.ObjVal
     m.dispose()
 
@@ -127,4 +151,4 @@ def solve_window(cw, *, time_limit=None, warm_start=None, corridor_hint=True,
     maximin = min(per)
     assert round(obj_val) <= maximin, \
         "window incumbent overclaims shortest path — cut bug"
-    return SolveResult(status, walls, maximin, per, bound)
+    return SolveResult(status, walls, maximin, per, bound, anchors)

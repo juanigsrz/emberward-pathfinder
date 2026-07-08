@@ -18,6 +18,8 @@ from dataclasses import dataclass
 import gurobipy as gp
 from gurobipy import GRB
 
+from interdiction.grid import square2
+
 ALT_PATHS_PER_SPAWN = 3
 ALT_POOL_THRESHOLD = 2000   # stop sampling alternates once the pool is this big
 POOL_CAP = 5000             # hard cap on stored paths (~1400 cells each on endless)
@@ -31,6 +33,7 @@ class SolveResult:
     maximin: int | None
     per_spawn: tuple | None
     bound: float
+    anchors: set | None = None  # blocks2 mode: top-left corners of placed 2x2 blocks
 
 
 _STATUS = {
@@ -42,11 +45,13 @@ _STATUS = {
 
 
 class MasterSolver:
-    def __init__(self, grid, rng=None, gurobi_seed=0, output=False):
+    def __init__(self, grid, rng=None, gurobi_seed=0, output=False,
+                 blocks2=False):
         self.grid = grid
         self.rng = rng
         self.gurobi_seed = gurobi_seed
         self.output = output
+        self.blocks2 = blocks2
         self.U = len(grid.walkable) - 1
         # (spawn_index, path_tuple) — persists across solves
         self.cut_pool: set[tuple[int, tuple]] = set()
@@ -69,7 +74,7 @@ class MasterSolver:
         return out
 
     def solve(self, *, free=None, fixed_walls=frozenset(), time_limit=None,
-              warm_start=None) -> SolveResult:
+              warm_start=None, warm_anchors=None) -> SolveResult:
         g = self.grid
         if free is None:
             free = g.buildable
@@ -129,6 +134,21 @@ class MasterSolver:
                 y[v] = m.addVar(lb=val, ub=val, vtype=GRB.BINARY,
                                 name=f"y_{v[0]}_{v[1]}")
 
+        # --- 2x2 block placement: walls are a disjoint union of blocks ---
+        b = {}
+        if self.blocks2:
+            cover = {v: [] for v in g.buildable}
+            for a in sorted(g.buildable):
+                sq = square2(a)
+                if all(v in g.buildable for v in sq):
+                    b[a] = m.addVar(vtype=GRB.BINARY,
+                                    name=f"b_{a[0]}_{a[1]}")
+                    for v in sq:
+                        cover[v].append(b[a])
+            # equality on a binary y forbids overlap and forces exact tiling
+            for v in sorted(g.buildable):
+                m.addConstr(y[v] == gp.quicksum(cover[v]))
+
         # --- claimed distances with parity encoding ---
         d0 = g.dist_field(set())
         zvars = []
@@ -172,6 +192,9 @@ class MasterSolver:
             for k, zk in enumerate(zvars):
                 zk.Start = ws_per[k]
             z.Start = ws_val
+            if warm_anchors is not None:
+                for a, var in b.items():
+                    var.Start = 1.0 if a in warm_anchors else 0.0
 
         for k, length, free_cells in rows:
             m.addConstr(zvars[k] <= length + (self.U - length)
@@ -223,10 +246,12 @@ class MasterSolver:
             return SolveResult("NO_SOLUTION", None, None, None, bound)
 
         walls = {v for v, var in y.items() if var.X > 0.5}
+        anchors = ({a for a, var in b.items() if var.X > 0.5}
+                   if self.blocks2 else None)
         obj_val = m.ObjVal
         m.dispose()
         maximin, per = g.evaluate(walls)
         # callback guarantees incumbents never overclaim
         assert maximin is not None and round(obj_val) <= maximin, \
             "incumbent overclaims shortest path — cut bug"
-        return SolveResult(status, walls, maximin, per, bound)
+        return SolveResult(status, walls, maximin, per, bound, anchors)

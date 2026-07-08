@@ -12,7 +12,8 @@ import random
 import sys
 
 from interdiction.bound import gap, run_bound
-from interdiction.grid import parse_map, parse_solution, write_solution
+from interdiction.grid import (parse_map, parse_solution, tile2_decompose,
+                               write_solution)
 from interdiction.lns import run_lns
 from interdiction.master import MasterSolver
 
@@ -40,6 +41,9 @@ def main(argv=None) -> int:
     p.add_argument("--subsolve-time", type=float, default=15.0)
     p.add_argument("--no-corridor-hint", action="store_true",
                    help="disable corridor-structure constraints in LNS windows")
+    p.add_argument("--blocks2", action="store_true",
+                   help="walls may only be placed as non-overlapping 2x2 "
+                        "blocks (disables corridor hints)")
     p.add_argument("--window-sizes", default="12,16,20",
                    help="comma-separated LNS window sizes")
     p.add_argument("--rng-seed", type=int, default=0)
@@ -69,16 +73,26 @@ def main(argv=None) -> int:
               "starting from empty walls", file=sys.stderr)
         walls = set()
 
+    seed_anchors = None
+    if args.blocks2 and walls:
+        try:
+            seed_anchors = tile2_decompose(walls)
+        except ValueError:
+            print("warning: --blocks2 seed/preset walls are not a disjoint "
+                  "2x2 tiling — starting from empty walls", file=sys.stderr)
+            walls = set()
+
     rng = random.Random(args.rng_seed)
     master = MasterSolver(grid, rng=rng, gurobi_seed=args.rng_seed,
-                          output=args.exact)
+                          output=args.exact, blocks2=args.blocks2)
     out = args.out or os.path.splitext(args.map)[0] + "_milp_solution.txt"
 
     best, bound_val = walls, None
     try:
         if args.exact:
             res = master.solve(time_limit=args.time,
-                               warm_start=walls or None)
+                               warm_start=walls or None,
+                               warm_anchors=seed_anchors)
             if res.walls is not None:
                 best = res.walls
             bound_val = res.bound
@@ -89,13 +103,14 @@ def main(argv=None) -> int:
                           total_time=args.time * (1 - args.bound_frac),
                           subsolve_time=args.subsolve_time, rng=rng,
                           corridor_hint=not args.no_corridor_hint,
-                          window_sizes=window_sizes)
+                          window_sizes=window_sizes, blocks2=args.blocks2)
             best = lns.walls
             for elapsed, it, v in lns.trajectory:
                 print(f"[lns] t={elapsed:7.1f}s iter={it:4d} maximin={v}")
             if not lns.interrupted:
                 bres = run_bound(grid, master, best,
-                                 time_limit=args.time * args.bound_frac)
+                                 time_limit=args.time * args.bound_frac,
+                                 incumbent_anchors=lns.anchors)
                 bound_val = bres.bound
                 if bres.maximin is not None and \
                         bres.maximin > grid.evaluate(best)[0]:
